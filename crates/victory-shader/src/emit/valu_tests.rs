@@ -284,7 +284,8 @@ fn f64_compares_match_ieee() {
         (0x21, "v_cmp_lt_f64", |a, b| a < b),
         (0x22, "v_cmp_eq_f64", |a, b| a == b),
         (0x24, "v_cmp_gt_f64", |a, b| a > b),
-        (0x25, "v_cmp_lg_f64", |a, b| a < b || a > b),
+        // Ordered and unequal (`a != b` would be true for a NaN).
+        (0x25, "v_cmp_lg_f64", |a, b| a.partial_cmp(&b).is_some_and(|o| o.is_ne())),
         (0x27, "v_cmp_o_f64", |a, b| !(a.is_nan() || b.is_nan())),
         (0x28, "v_cmp_u_f64", |a, b| a.is_nan() || b.is_nan()),
         (0x2D, "v_cmp_neq_f64", |a, b| a != b),
