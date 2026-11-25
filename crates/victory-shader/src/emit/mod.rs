@@ -82,8 +82,6 @@
 
 mod bitcode;
 mod container;
-#[cfg(test)]
-mod cpu_tests;
 #[cfg(all(test, windows))]
 mod diff_tests;
 #[cfg(all(test, windows))]
@@ -98,6 +96,8 @@ mod shader;
 mod threading;
 #[cfg(windows)]
 pub mod validator;
+#[cfg(test)]
+mod cpu_tests;
 #[cfg(test)]
 mod test_skip;
 #[cfg(all(test, windows))]

@@ -1025,6 +1025,49 @@ bad:
   unreachable
 }
 
+; Doubles: MakeDouble (101) and SplitDouble (102) join and split the dword
+; pair; Fma (47) and DMax/DMin (35/36) as for floats.
+%dx.types.splitdouble = type { i32, i32 }
+declare double @llvm.fma.f64(double, double, double)
+declare double @llvm.maxnum.f64(double, double)
+declare double @llvm.minnum.f64(double, double)
+define double @dx.op.makeDouble.f64(i32 %op, i32 %lo, i32 %hi) {
+  %l = zext i32 %lo to i64
+  %h = zext i32 %hi to i64
+  %hs = shl i64 %h, 32
+  %b = or i64 %hs, %l
+  %d = bitcast i64 %b to double
+  ret double %d
+}
+define %dx.types.splitdouble @dx.op.splitDouble.f64(i32 %op, double %d) {
+  %b = bitcast double %d to i64
+  %l = trunc i64 %b to i32
+  %hs = lshr i64 %b, 32
+  %h = trunc i64 %hs to i32
+  %r0 = insertvalue %dx.types.splitdouble undef, i32 %l, 0
+  %r1 = insertvalue %dx.types.splitdouble %r0, i32 %h, 1
+  ret %dx.types.splitdouble %r1
+}
+define double @dx.op.tertiary.f64(i32 %op, double %a, double %b, double %c) {
+  %f = call double @llvm.fma.f64(double %a, double %b, double %c)
+  ret double %f
+}
+define double @dx.op.binary.f64(i32 %op, double %a, double %b) {
+  switch i32 %op, label %bad [
+    i32 35, label %max
+    i32 36, label %min
+  ]
+max:
+  %x = call double @llvm.maxnum.f64(double %a, double %b)
+  ret double %x
+min:
+  %n = call double @llvm.minnum.f64(double %a, double %b)
+  ret double %n
+bad:
+  call void @unknown(i32 %op)
+  unreachable
+}
+
 ; Dot4AddI8Packed (163) and Dot4AddU8Packed (164): acc + the four byte products.
 define i32 @dx.op.dot4AddPacked.i32(i32 %op, i32 %acc, i32 %a, i32 %b) {
   %va = bitcast i32 %a to <4 x i8>
