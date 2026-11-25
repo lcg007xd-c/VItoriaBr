@@ -1426,6 +1426,7 @@ impl<'a> Lower<'a> {
                 let n = i.name();
                 n.starts_with("ds_swizzle")
                     || n.contains("permute")
+                    || n.starts_with("v_permlane")
                     || n.starts_with("v_mbcnt")
                     || matches!(n, "v_readlane_b32" | "v_writelane_b32")
                     || matches!(&i.fields, Fields::Valu(v) if v.dpp.is_some())
@@ -11263,6 +11264,74 @@ mod tests {
             base_register: 0,
             user_data,
             slot,
+        }
+    }
+
+    /// `v_permlane16_b32` / `v_permlanex16_b32` read other lanes, so a
+    /// compute program using them runs in the console's lane order (here
+    /// the only cross-lane instruction, which once went unnoticed: their
+    /// names say `permlane`, not `permute`).
+    #[test]
+    fn permlanes_ask_for_console_lanes() {
+        for op in [0x377u32, 0x378] {
+            let words = [
+                0xBE85_0380, // s_mov_b32 s5, 0
+                0xF408_0202, // s_load_dwordx4 s[8:11], s[4:5], 0
+                0xFA00_0000,
+                0x7E02_0200,            // v_mov_b32 v1, s0
+                0xD400_0000 | op << 16, // v_permlane(x)16_b32 v0, v1, s1, s2
+                0x0008_0301,
+                0xE070_0000, // buffer_store_dword v0, off, s[8:11], 0
+                0x8002_0000,
+                S_ENDPGM,
+            ];
+            let constants = RootParam {
+                sgprs: 4,
+                ..root(RootType::Constants, 0, 0)
+            };
+            let buffer = UsedResource {
+                kind: ResourceType::Uav,
+                root: RootType::Table,
+                table_offset_dwords: 0,
+                lower_bound: 0,
+                stride: 0,
+                dwords: 4,
+                user_data: 4,
+                slot: 1,
+            };
+            // Two console waves per group, no LDS: only the permlane asks
+            // for the console's lanes.
+            let native = NativeProgram {
+                stage: HwStage::Cs,
+                wave64: false,
+                vgprs: 256,
+                layout: vec![constants, root(RootType::Table, 4, 1)],
+                used: vec![buffer],
+                io: StageIo::Cs(ComputeIo {
+                    rsrc2: 5 << 1,
+                    threads: [64, 1, 1],
+                }),
+                code: words.iter().flat_map(|w| w.to_le_bytes()).collect(),
+            };
+            let p = ir::build(&native.code, false, 256).unwrap();
+            let st = structure::structure(&p).unwrap();
+            let res = resource::track(&p, &native.layout, native.stage, Some(&st)).unwrap();
+            let io = io::raise(&p, &native).unwrap();
+            let lowered = lower(&Parts {
+                native: &native,
+                p: &p,
+                st: &st,
+                io: &io,
+                res: &res,
+                inputs: vec![],
+                outputs: vec![],
+                prims: vec![],
+                mesh_stride: 0,
+            })
+            .unwrap_or_else(|e| panic!("VOP3 {op:#x}: {e}"));
+            assert!(lowered.wave_ops, "VOP3 {op:#x}: no wave operations");
+            // The host runs it in waves of the console's size.
+            assert_eq!(lowered.wave_size, Some(32), "VOP3 {op:#x}");
         }
     }
 
