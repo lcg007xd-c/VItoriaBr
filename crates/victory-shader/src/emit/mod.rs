@@ -1311,6 +1311,8 @@ mod tests {
         let st = crate::structure::structure(&p).unwrap();
         let res = crate::resource::track(&p, &native.layout, native.stage, Some(&st)).unwrap();
         let io = crate::io::raise(&p, &native).unwrap();
+        // Validated only on Windows (dxil.dll).
+        #[cfg_attr(not(windows), allow(unused_variables))]
         let out = super::emit(&c, &native, &p, &st, &io, &res).expect("a POPS pixel shader translates");
         #[cfg(windows)]
         if let Ok(mut v) =
