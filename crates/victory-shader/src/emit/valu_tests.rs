@@ -1697,6 +1697,21 @@ fn packed_dot_products_and_clamps_execute_cleanly() {
         },
     );
 
+    // Signed nibbles: -1 * 7 in every lane plus 100, and -8 * -8 in every lane.
+    let [d8i_w0, d8i_w1] = vop3p(0x018, 0, vgpr(1), vgpr(2), vgpr(3));
+    let dot8_i4_shader = build_valu_cs(&[d8i_w0, d8i_w1]);
+    run_cases(
+        &dot8_i4_shader,
+        &[
+            [0xFFFF_FFFFu32, 0x7777_7777u32, 100u32, 0],
+            [0x8888_8888u32, 0x8888_8888u32, 0u32, 0],
+        ],
+        |backend, i, _inp, got| {
+            let want = [44, 512][i];
+            assert_eq!(got, want, "{backend}: v_dot8_i32_i4 case {i} got {got}, want {want}");
+        },
+    );
+
     let [mut d2f_w0, d2f_w1] = vop3p(0x013, 0, vgpr(1), vgpr(2), vgpr(3));
     let d2f_in = [[0x4000_3C00u32, 0x4400_4200u32, 5.0f32.to_bits(), 0]];
     let dot2_f16_shader = build_valu_cs(&[d2f_w0, d2f_w1]);
