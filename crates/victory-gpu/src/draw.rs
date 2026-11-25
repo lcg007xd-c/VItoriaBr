@@ -2855,6 +2855,8 @@ impl State {
             // Up to date by this draw: not the texture pass's to make.
             if crate::descriptor::host::is_texture_view(&view) {
                 host.texture_slot_tabled(index, true);
+            } else {
+                host.buffer_slot_tabled(index);
             }
         }
     }
@@ -3023,6 +3025,9 @@ impl State {
                         };
                         list.defer_fill(to, address as *const u8, size as usize);
                         host.constant_at(index, gpu, size);
+                        if let Some(title) = title_first {
+                            host.buffer_slot_tabled(title + k);
+                        }
                     }
                     Some(view) => {
                         host.make_at(index, &view);
@@ -3037,12 +3042,14 @@ impl State {
                         // (its texture is up to date now), and made in
                         // place as the texture pass would have made it,
                         // for a shader that picks it by index all the same.
-                        if let Some(title) = title_first
-                            && crate::descriptor::host::is_texture_view(&view)
-                        {
-                            host.texture_slot_tabled(title + k, kind.is_some());
-                            if kind.is_some() {
-                                host.mirror(title + k, table + u64::from(k) * 32, true);
+                        if let Some(title) = title_first {
+                            if crate::descriptor::host::is_texture_view(&view) {
+                                host.texture_slot_tabled(title + k, kind.is_some());
+                                if kind.is_some() {
+                                    host.mirror(title + k, table + u64::from(k) * 32, true);
+                                }
+                            } else {
+                                host.buffer_slot_tabled(title + k);
                             }
                         }
                     }
@@ -3767,6 +3774,8 @@ fn readable(list: &HostList, kind: ResourceType, view: &View) {
         (View::Unordered(resource, _, _), ResourceType::Uav) => {
             #[cfg(feature = "diagnostics")]
             crate::capture::note_target(*resource as This);
+            // Some compute-written textures are also read by the title CPU.
+            list.texture_written(*resource as This);
             // Unordered access to a depth texture is its colour twin's.
             if !list.twin_use(*resource as This, true, true) {
                 crate::list::ensure_state(list, *resource as This, UNORDERED_ACCESS);
