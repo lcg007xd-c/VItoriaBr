@@ -650,6 +650,43 @@ fn neg_and_clamp_modifiers_apply() {
     );
 }
 
+#[test]
+fn scalar_min_max_set_scc_to_the_comparison() {
+    // op s12, s0, s1; s_cselect_b32 s13, 1, 0; v_mov_b32 v0, s13: v0 is
+    // SCC. RDNA2: s_min sets SCC = S0 < S1, s_max SCC = S0 > S1 (not
+    // whether the result is 0).
+    let cselect = 0x8000_0000 | 0x0A << 23 | 13 << 16 | 0x80 << 8 | 0x81;
+    let cases = [[5u32, 3, 0, 0], [3, 5, 0, 0], [0, 7, 0, 0], [7, 0, 0, 0], [u32::MAX, 1, 0, 0], [4, 4, 0, 0]];
+    type Pick = fn(u32, u32) -> bool;
+    let ops: [(u32, &str, Pick); 4] = [
+        (6, "s_min_i32", |a, b| (a as i32) < (b as i32)),
+        (7, "s_min_u32", |a, b| a < b),
+        (8, "s_max_i32", |a, b| (a as i32) > (b as i32)),
+        (9, "s_max_u32", |a, b| a > b),
+    ];
+    for (op, name, scc) in ops {
+        let body = [0x8000_0000 | op << 23 | 12 << 16 | 1 << 8, cselect, vop1(0x001, 0, 13)];
+        let want: Vec<_> = cases.iter().map(|c| (*c, u32::from(scc(c[0], c[1])))).collect();
+        expect(name, &body, &want);
+    }
+}
+
+#[test]
+fn scalar_shift_adds_set_scc_to_the_carry() {
+    // s_lshl1_add_u32 / s_lshl4_add_u32 s12, s0, s1, then SCC as above: the
+    // carry out of the 32-bit add (0 for 1 << 1 + 1, 1 for 0x8000_0000 << 1
+    // + 0xFFFF_FFFF: the shifted-out bit alone is no carry).
+    let cselect = 0x8000_0000 | 0x0A << 23 | 13 << 16 | 0x80 << 8 | 0x81;
+    for (op, n) in [(0x2Eu32, 1u32), (0x31, 4)] {
+        let body = [0x8000_0000 | op << 23 | 12 << 16 | 1 << 8, cselect, vop1(0x001, 0, 13)];
+        let cases: Vec<_> = [[1u32, 1], [0x8000_0000, 1], [0x8000_0000, u32::MAX], [0x0FFF_FFFF, 0x10], [3, u32::MAX]]
+            .iter()
+            .map(|&[a, b]| ([a, b, 0, 0], u32::from((a << n).checked_add(b).is_none())))
+            .collect();
+        expect(&format!("s_lshl{n}_add_u32"), &body, &cases);
+    }
+}
+
 /// Stands in for the `dx.op` intrinsics a translated compute shader calls,
 /// so `lli` can run it. The test fills `@consts` (row 0: s0..s3; row 1: the
 /// descriptor table, slot 0) and reads what the shader stored from `@run`'s
