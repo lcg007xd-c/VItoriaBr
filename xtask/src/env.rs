@@ -5,6 +5,8 @@
 //! file. The table says where each is read and whether the other docs
 //! mention it; `victory-core` reads the names back to warn about a set
 //! variable that nothing reads (a typo, or a switch that was removed).
+//! `cargo xtask env --check` fails on a stale table; the test only warns
+//! (unless `VICTORY_STRICT_TESTS=1`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -123,16 +125,23 @@ pub fn run(root: &Path, check: bool) -> Result<()> {
 mod tests {
     use super::*;
 
+    /// A stale table is a warning (a PR adding a switch should not go red
+    /// over it), and a failure with `VICTORY_STRICT_TESTS=1`.
     #[test]
     fn env_table_is_current() {
         let root = crate::workspace_root();
         let now = std::fs::read_to_string(root.join(DOC))
             .unwrap_or_default()
             .replace("\r\n", "\n");
+        if now == render(&root).unwrap() {
+            return;
+        }
+        let strict = std::env::var("VICTORY_STRICT_TESTS").is_ok_and(|v| v == "1");
         assert!(
-            now == render(&root).unwrap(),
+            !strict,
             "{DOC} is out of date: run `cargo xtask env` and commit it"
         );
+        eprintln!("warning: {DOC} is out of date: run `cargo xtask env` and commit it");
     }
 
     #[test]

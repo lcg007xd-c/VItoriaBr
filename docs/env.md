@@ -213,7 +213,7 @@ variable missing from this list is reported as read by nothing.
 | `VICTORY_STAGING_POOL_MB` | `crates/victory-gpu/src/texture.rs` |  |
 | `VICTORY_STALE_TEXTURES` | `crates/victory-gpu/src/descriptor/host.rs` |  |
 | `VICTORY_STRICT_JOINS` | `crates/victory-shader/src/emit/lower.rs` |  |
-| `VICTORY_STRICT_TESTS` | `crates/victory-shader/src/emit/test_skip.rs` |  |
+| `VICTORY_STRICT_TESTS` | `crates/victory-shader/src/emit/test_skip.rs`, `xtask/src/env.rs` |  |
 | `VICTORY_SWEEP` | `crates/victory-gpu/src/host.rs` |  |
 | `VICTORY_SYNC_NULL_SKIP` | `crates/victory-gpu/src/descriptor/host.rs` | yes |
 | `VICTORY_TABLED_TEXTURES` | `crates/victory-gpu/src/descriptor/host.rs` |  |
